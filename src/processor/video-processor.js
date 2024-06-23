@@ -1,34 +1,43 @@
-import { PassThrough } from 'node:stream'
-import { spawn } from 'node:child_process'
+import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promises as fs } from 'node:fs';
 
 export default class VideoProcessor {
-    constructor() {
-        this.outputVideo = new PassThrough()
-    }
+    async transcodeVideo(inputFilePath, outputFormat) {
+        // Convert import.meta.url to file path
+        const __dirname = dirname(fileURLToPath(import.meta.url));
+        const outputDir = join(__dirname, '..', '..', 'output');
+        
+        // Ensure the output directory exists
+        await fs.mkdir(outputDir, { recursive: true });
+        
+        const outputFileName = `output-${randomUUID()}.${outputFormat}`;
+        const outputPath = join(outputDir, outputFileName);
 
-    process(inputStream) {
-        const ffmpeg = spawn('ffmpeg', [
-           '-i', 'pipe:0',
-            '-vf', 'hue=s=0',
-            '-f', 'matroska',
-            'pipe:1' 
-        ])
+        const ffmpegArgs = [
+            '-i', inputFilePath,
+            '-f', outputFormat,
+            outputPath
+        ];
 
-        inputStream.pipe(ffmpeg.stdin)
-        ffmpeg.stdout.pipe(this.outputVideo)
+        return new Promise((resolve, reject) => {
+            const ffmpegProcess = spawn('ffmpeg', ffmpegArgs);
 
-        ffmpeg.stderr.on('data', (data) => console.error('ffmpeg error:', data.toString()))
+            let stderr = '';
 
-        ffmpeg.on('close', (code) => {
-            if (code !== 0) {
-                console.error('ffmpeg process exited with code', code)
-            }
+            ffmpegProcess.stderr.on('data', (data) => {
+                stderr += data.toString();
+            });
 
-            this.outputVideo.end()
-        })
-    }
-
-    getOutput() {
-        return this.outputVideo
+            ffmpegProcess.on('close', (code) => {
+                if (code === 0) {
+                    resolve(outputPath);
+                } else {
+                    reject(new Error(`ffmpeg exited with code ${code}: ${stderr}`));
+                }
+            });
+        });
     }
 }

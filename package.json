@@ -3,11 +3,18 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "node test"
+    "test": "node --test | pino-minimal",
+    "start": "node src/ | pino-minimal"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "pino": "^9.2.0"
+  },
+  "devDependencies": {
+    "pino-minimal": "^1.2.1"
+  }
 }

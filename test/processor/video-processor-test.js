@@ -1,26 +1,42 @@
-import { test, describe } from 'node:test'
-import assert from 'node:assert/strict'
-import VideoProcessor from '../../src/processor/video-processor.js'
+import { test, describe, before } from 'node:test';
+import assert from 'node:assert/strict';
+import { PassThrough } from 'node:stream';
+import VideoProcessor from '../../src/processor/video-processor.js';
+import { createReadStream } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 describe('VideoProcessor', () => {
-    test('should process video', () => {
-        const videoProcessor = new VideoProcessor()
-        const inputStream = new PassThrough()
-        const outputVideo = videoProcessor.getOutput()
-        const outputChunks = []
+    let videoProcessor;
 
-        outputVideo.on('data', (chunk) => {
-            outputChunks.push(chunk)
-        })
+    before(() => {
+        videoProcessor = new VideoProcessor();
+    });
 
-        videoProcessor.process(inputStream)
+    test('#transcodeVideo should transcode the video to the specified format', async () => {
+        const __dirname = path.dirname(fileURLToPath(import.meta.url));
+        const inputFilePath = path.join(__dirname, '..','mocks', 'input.mp4');
+        const outputFormat = 'webm';
+        const outputPath = await videoProcessor.transcodeVideo(inputFilePath, outputFormat);
 
-        inputStream.write(Buffer.from([0x00, 0x01, 0x02]))
-        inputStream.write(Buffer.from([0x03, 0x04, 0x05]))
-        inputStream.end()
+        const readStream = createReadStream(outputPath);
+        const passThrough = new PassThrough();
+        readStream.pipe(passThrough);
 
-        assert.equal(outputChunks.length, 2)
-        assert.deepEqual(outputChunks[0], Buffer.from([0x00, 0x01, 0x02]))
-        assert.deepEqual(outputChunks[1], Buffer.from([0x03, 0x04, 0x05]))
-    })
-})
+        let data = '';
+        passThrough.on('data', (chunk) => {
+            data += chunk;
+        });
+
+        return new Promise((resolve, reject) => {
+            passThrough.on('end', () => {
+                assert.ok(data.length > 0, 'Transcoded file should not be empty');
+                resolve();
+            });
+
+            passThrough.on('error', (error) => {
+                reject(error);
+            });
+        });
+    });
+});
